@@ -9,6 +9,7 @@
 #include <conio.h>
 #include <mutex>
 #include <map>
+#include <shared_mutex>
 
 #include "config.h"
 #include "TCPServer.h"
@@ -26,7 +27,8 @@ bool terminateServer = false;
 typedef std::vector<Request> VectorOfRequests;
 typedef std::map<string, VectorOfRequests> RequestsMap; // TODO: change to vectors of just the message - not the whole request
 RequestsMap requests;
-mutex m;
+std::mutex m;
+std::shared_mutex sharedMutex;
 
 int main() {
 	TCPServer server(DEFAULT_PORT);
@@ -84,47 +86,57 @@ void serverThreadFunction(TCPServer* server, ReceivedSocketData&& data) {
 	server->closeClientSocket(data);
 }
 
-string protocolVerifier(string requestReceived) {
-	int count = 0;
 
+string protocolVerifier(string requestReceived) {
+
+	std::unique_lock<std::shared_mutex> uniqueLock(sharedMutex, std::defer_lock);
+	std::shared_lock<std::shared_mutex> sharedLock(sharedMutex, std::defer_lock);
+	
 	Request newRequest = Request::parse(requestReceived);
 	if (newRequest.isValid()) {
 		const char requestTypeFirstChar = newRequest.getRequestType()[0];
 		switch (requestTypeFirstChar) {
 		case 'P': {
-			m.lock();
+			//m.lock();
+			uniqueLock.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) { // if new request
 				VectorOfRequests newVector;
 				newVector.push_back(newRequest);
 				requests.insert(pair<string, VectorOfRequests>(newRequest.getTopicID(), newVector));
-				m.unlock();
+				uniqueLock.unlock();
+				//m.unlock();
 				return "0";
 			}
 			else {
 				mapIterator->second.push_back(newRequest);
 				int count = mapIterator->second.size();
 				const string ret = std::to_string(--count);
-				m.unlock();
+				uniqueLock.unlock();
+				//m.unlock();
 				return ret;
 			}
 			break;
 		}
 		case 'R': {
-			m.lock();
+			//m.lock();
+			sharedLock.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) {
-				m.unlock();
+				sharedLock.unlock();
+				//m.unlock();
 				return "";
 			}
 			else {
 				const int countToFind = stoi(newRequest.getMessage());
 				if (mapIterator->second.size() <= countToFind) {
-					m.unlock();
+					sharedLock.unlock();
+					//m.unlock();
 					return "";
 				}
 				else {
-					m.unlock();
+					sharedLock.unlock();
+					//m.unlock();
 					return mapIterator->second.at(countToFind).getMessage();
 				}
 			}
@@ -132,9 +144,11 @@ string protocolVerifier(string requestReceived) {
 		}
 		case 'L': {
 			int count = 0;
-			m.lock();
+			//m.lock();
+			sharedLock.lock();
 			if (requests.size() == 0) {
-				m.unlock();
+				sharedLock.unlock();
+				//m.unlock();
 				return "";
 			}
 			else {
@@ -145,21 +159,25 @@ string protocolVerifier(string requestReceived) {
 						ret = ret.append("#");
 					}
 				}
-				m.unlock();
+				sharedLock.unlock();
+				//m.unlock();
 				return ret;
 			}
 			break;
 		}
 		case 'C': {
-			m.lock();
+			//m.lock();
+			sharedLock.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) {
-				m.unlock();
+				sharedLock.unlock();
+				//m.unlock();
 				return "0";
 			}
 			else {
 				const string ret = std::to_string(mapIterator->second.size());
-				m.unlock();
+				sharedLock.unlock();
+				//m.unlock();
 				return ret;
 			}
 			break;
