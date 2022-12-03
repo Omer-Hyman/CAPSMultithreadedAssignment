@@ -24,7 +24,7 @@ string protocolVerifier(string request);
 
 bool terminateServer = false;
 typedef std::vector<Request> VectorOfRequests;
-typedef std::map<string, VectorOfRequests> RequestsMap;
+typedef std::map<string, VectorOfRequests> RequestsMap; // TODO: change to vectors of just the message - not the whole request
 RequestsMap requests;
 mutex m;
 
@@ -85,69 +85,93 @@ void serverThreadFunction(TCPServer* server, ReceivedSocketData&& data) {
 }
 
 string protocolVerifier(string requestReceived) {
-	// TODO: refactor to get rid of nested if loops maybe?
-
 	int count = 0;
 
 	Request newRequest = Request::parse(requestReceived);
 	if (newRequest.isValid()) {
+		const char requestTypeFirstChar = newRequest.getRequestType()[0];
+		switch (requestTypeFirstChar) {
+		case 'P': {
 			m.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) { // if new request
-				if (newRequest.getRequestType() == "POST") {
-					VectorOfRequests newVector;
-					newVector.push_back(newRequest);
-					requests.insert(pair<string, VectorOfRequests>(newRequest.getTopicID(), newVector));
-					m.unlock();
-					return "0";
-				}
-				else if (newRequest.getRequestType() == "READ") {
+				VectorOfRequests newVector;
+				newVector.push_back(newRequest);
+				requests.insert(pair<string, VectorOfRequests>(newRequest.getTopicID(), newVector));
+				m.unlock();
+				return "0";
+			}
+			else {
+				mapIterator->second.push_back(newRequest);
+				int count = mapIterator->second.size();
+				const string ret = std::to_string(--count);
+				m.unlock();
+				return ret;
+			}
+			break;
+		}
+		case 'R': {
+			m.lock();
+			auto mapIterator = requests.find(newRequest.getTopicID());
+			if (mapIterator == requests.end()) {
+				m.unlock();
+				return "";
+			}
+			else {
+				const int countToFind = stoi(newRequest.getMessage());
+				if (mapIterator->second.size() <= countToFind) {
 					m.unlock();
 					return "";
 				}
-			}
-			else { // existing request
-				if (newRequest.getRequestType() == "POST") {
-					const string ret = std::to_string(mapIterator->second.size());
+				else {
 					m.unlock();
-					return ret;
+					return mapIterator->second.at(countToFind).getMessage();
 				}
-				else if (newRequest.getRequestType() == "READ") {
-					const int index = stoi(newRequest.getMessage());
-					string ret = "";
-					if (mapIterator->second.size() > index) {
-						ret = mapIterator->second.at(index).getMessage();
+			}
+			break;
+		}
+		case 'L': {
+			int count = 0;
+			m.lock();
+			if (requests.size() == 0) {
+				m.unlock();
+				return "";
+			}
+			else {
+				string ret = "";
+				for (auto iter = requests.begin(); iter != requests.end(); iter++) {
+					ret = ret.append("@" + iter->first);
+					if (std::next(iter) != requests.end()) {
+						ret = ret.append("#");
 					}
-					m.unlock();
-					return ret;
 				}
+				m.unlock();
+				return ret;
 			}
-			m.unlock();
+			break;
+		}
+		case 'C': {
+			m.lock();
+			auto mapIterator = requests.find(newRequest.getTopicID());
+			if (mapIterator == requests.end()) {
+				m.unlock();
+				return "0";
+			}
+			else {
+				const string ret = std::to_string(mapIterator->second.size());
+				m.unlock();
+				return ret;
+			}
+			break;
+		}
+		default:
+			return "";
+			break;
+		}
 	}
 	else {
-		cout << "Request " << requestReceived << "was not added.\n";
 		return "";
 	}
-	
-	//else if (ReadRequest::parse(request).isRequestValid()) { // return the first message (if read message is 0 after #) with the same topic id.
-	//	int counter = 0;
-	//	m.lock();
-	//	for (PostRequest existingPost : postRequests) {
-	//		if (existingPost.getTopicId() == newRead.getTopicId()) {
-	//			if (counter == newRead.getPostId()) {
-	//				return existingPost.getMessage();
-	//			}
-	//			counter++;
-	//		}
-	//	}
-	//	m.unlock();
-	//}
-	//else if (ExitRequest::parse(request).isRequestValid()) {
-	//	return "";
-	//}
-
-	//cout << "Can't parse message " << request << endl;
-	//return "";
 }
 
 #else
