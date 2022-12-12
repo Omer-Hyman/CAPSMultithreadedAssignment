@@ -10,6 +10,7 @@
 #include <mutex>
 #include <map>
 #include <shared_mutex>
+#include <fstream>
 
 #include "config.h"
 #include "TCPServer.h"
@@ -25,9 +26,8 @@ string protocolVerifier(string request);
 
 bool terminateServer = false;
 typedef std::vector<Request> VectorOfRequests;
-typedef std::map<string, VectorOfRequests> RequestsMap; // TODO: change to vectors of just the message - not the whole request
+typedef std::map<string, vector<string>> RequestsMap; // TODO: change to vectors of just the message - not the whole request
 RequestsMap requests;
-std::mutex m;
 std::shared_mutex sharedMutex;
 
 int main() {
@@ -40,15 +40,29 @@ int main() {
 	while (!terminateServer) {
 		receivedData = server.accept();
 
-		// TODO: implement a barrier at the start and end. Do timer in between the two barriers.
 		if (!terminateServer) {
 			serverThreads.emplace_back(serverThreadFunction, &server, receivedData);
 		}
 	}
 
-	cout << serverThreads.size() << "\n";
 	for (thread& thread : serverThreads)
 		thread.join();
+
+	int count = 0;
+	for (auto request : requests) {
+		count = count + request.second.size();
+	}
+	cout << "Total number of post requests stored: " << count << endl;
+
+	ofstream file;
+	file.open("ServerDataStructure.txt", ios::app);
+	if (file.fail()) {
+		cout << "File was not opened!";
+	}
+	else {
+		file << ;
+		file.close();
+	}
 
 	cout << "Server terminated." << endl;
 	int keepAppOpen = _getch();
@@ -62,18 +76,11 @@ void serverThreadFunction(TCPServer* server, ReceivedSocketData&& data) {
 	do {
 		server->receiveData(data, 0); // updates request field
 		if (data.request != "" && data.request != "exit" && data.request != "EXIT") {
-			//cout << "[" << socketIndex << "]" << "Data received: " << data.request << endl;
 			data.reply = protocolVerifier(data.request);
-			server->sendReply(data);
-		}
-		else if (data.request == "exit" || data.request == "EXIT") {
-			cout << "[" << socketIndex << "] Data received: " << data.request << endl;
-			cout << "[" << socketIndex << "] Exiting... Bye bye!" << endl;
-
+		} else if (data.request == "exit" || data.request == "EXIT") {
 			data.reply = "";
-			server->sendReply(data);
 		}
-
+		server->sendReply(data);
 	} while (data.request != "exit" && data.request != "EXIT" && !terminateServer);
 
 	if (!terminateServer && (data.request == "exit" || data.request == "EXIT")) {
@@ -86,7 +93,6 @@ void serverThreadFunction(TCPServer* server, ReceivedSocketData&& data) {
 	server->closeClientSocket(data);
 }
 
-
 string protocolVerifier(string requestReceived) {
 
 	std::unique_lock<std::shared_mutex> uniqueLock(sharedMutex, std::defer_lock);
@@ -97,58 +103,48 @@ string protocolVerifier(string requestReceived) {
 		const char requestTypeFirstChar = newRequest.getRequestType()[0];
 		switch (requestTypeFirstChar) {
 		case 'P': {
-			//m.lock();
 			uniqueLock.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) { // if new request
-				VectorOfRequests newVector;
-				newVector.push_back(newRequest);
-				requests.insert(pair<string, VectorOfRequests>(newRequest.getTopicID(), newVector));
+				vector<string> newVector = { newRequest.getMessage() };
+				requests.insert(pair<string, vector<string>>(newRequest.getTopicID(), newVector));
 				uniqueLock.unlock();
-				//m.unlock();
 				return "0";
 			}
 			else {
-				mapIterator->second.push_back(newRequest);
+				mapIterator->second.push_back(newRequest.getMessage());
 				int count = mapIterator->second.size();
 				const string ret = std::to_string(--count);
 				uniqueLock.unlock();
-				//m.unlock();
 				return ret;
 			}
 			break;
 		}
 		case 'R': {
-			//m.lock();
 			sharedLock.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) {
 				sharedLock.unlock();
-				//m.unlock();
 				return "";
 			}
 			else {
 				const int countToFind = stoi(newRequest.getMessage());
 				if (mapIterator->second.size() <= countToFind) {
 					sharedLock.unlock();
-					//m.unlock();
 					return "";
 				}
 				else {
 					sharedLock.unlock();
-					//m.unlock();
-					return mapIterator->second.at(countToFind).getMessage();
+					return mapIterator->second.at(countToFind);
 				}
 			}
 			break;
 		}
 		case 'L': {
 			int count = 0;
-			//m.lock();
 			sharedLock.lock();
 			if (requests.size() == 0) {
 				sharedLock.unlock();
-				//m.unlock();
 				return "";
 			}
 			else {
@@ -160,24 +156,20 @@ string protocolVerifier(string requestReceived) {
 					}
 				}
 				sharedLock.unlock();
-				//m.unlock();
 				return ret;
 			}
 			break;
 		}
 		case 'C': {
-			//m.lock();
 			sharedLock.lock();
 			auto mapIterator = requests.find(newRequest.getTopicID());
 			if (mapIterator == requests.end()) {
 				sharedLock.unlock();
-				//m.unlock();
 				return "0";
 			}
 			else {
 				const string ret = std::to_string(mapIterator->second.size());
 				sharedLock.unlock();
-				//m.unlock();
 				return ret;
 			}
 			break;

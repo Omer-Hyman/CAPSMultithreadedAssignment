@@ -6,6 +6,8 @@
 #include <stdio.h>
 
 #include "TCPClient.h"
+#include <iostream>
+
 
 // Need to link with Ws2_32.lib, Mswsock.lib, and Advapi32.lib
 #pragma comment (lib, "Ws2_32.lib")
@@ -34,6 +36,7 @@ TCPClient::TCPClient(string server, unsigned short int port)
 	this->port = port;
 	this->portString = portString;
 	this->server = server;
+	this->amountOfRequestsSent = 0;
 
 	ConnectSocket = INVALID_SOCKET;
 }
@@ -68,7 +71,7 @@ void TCPClient::OpenConnection()
 
 		// Create a SOCKET for connecting to server
 		ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
-		if (ConnectSocket == INVALID_SOCKET) {
+  	if (ConnectSocket == INVALID_SOCKET) {
 			printf("socket failed with error: %ld\n", WSAGetLastError());
 			WSACleanup();
 			exit(1);
@@ -93,44 +96,39 @@ void TCPClient::OpenConnection()
 	}
 }
 
-string TCPClient::send(string request)
+string TCPClient::send(string request, bool throttled)
 {
-	char recvbuf[DEFAULT_BUFLEN];
-	int iResult;
-	int recvbuflen = DEFAULT_BUFLEN - 1;
-	string dataReceived;
+	this->amountOfRequestsSent++;
+	if ((throttled && this->amountOfRequestsSent <= 1000) || !throttled) {
+		char recvbuf[DEFAULT_BUFLEN];
+		int iResult;
+		int recvbuflen = DEFAULT_BUFLEN - 1;
+		string dataReceived;
 
-	//OpenConnection();
+		// Send an initial buffer
+		iResult = ::send(ConnectSocket, request.c_str(), (int)request.size() + 1, 0);
+		if (iResult == SOCKET_ERROR) {
+			printf("send failed with error: %d\n", WSAGetLastError());
+			closesocket(ConnectSocket);
+			WSACleanup();
+			exit(1);
+		}
 
-	// Send an initial buffer
-	iResult = ::send(ConnectSocket, request.c_str(), (int)request.size() + 1, 0);
-	if (iResult == SOCKET_ERROR) {
-		printf("send failed with error: %d\n", WSAGetLastError());
-		closesocket(ConnectSocket);
-		WSACleanup();
-		exit(1);
+		// Wait to receive from server
+		iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
+		if (iResult >= 0)
+		{
+			recvbuf[iResult] = '\0';
+			dataReceived = recvbuf;
+		}
+		else
+		{
+			printf("recv failed with error: %d\n", WSAGetLastError());
+			exit(1);
+		}
+		return dataReceived;
 	}
-
-	//printf("Bytes Sent: %ld\n", iResult);
-
-	// Wait to receive from server
-
-	iResult = recv(ConnectSocket, recvbuf, recvbuflen, 0);
-	if (iResult >= 0)
-	{
-		recvbuf[iResult] = '\0';
-		//printf("Bytes received: %d\n", iResult);
-		dataReceived = recvbuf;
-	}
-	else
-	{
-		printf("recv failed with error: %d\n", WSAGetLastError());
-		exit(1);
-	}
-
-	//CloseConnection();
-
-	return dataReceived;
+	return "";
 }
 
 void TCPClient::CloseConnection()

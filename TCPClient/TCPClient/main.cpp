@@ -3,8 +3,11 @@
 #include <thread>
 #include <conio.h>
 #include <vector>
-#include "RequestParser.h"
 #include <windows.h>
+#include <mutex>
+#include <fstream>
+#include "barrier.hpp"
+#include <map>
 
 #define PORT 12345
 
@@ -13,102 +16,135 @@ using namespace std;
 int howManyRequests();
 int requestsForHowLong();
 int howManyClients();
-void threadClient(TCPClient* client);
+void threadClient(bool isPoster);
+LONGLONG startTimer();
+LONGLONG measureTime();
 
 int numberOfRequests, secondsOfRequests, numberOfPosterClients, numberOfReaderClients;
+bool isProgramThrottled = false;
 string topics[11] = { "heel", "kick", "hard", "dragon", "forward", "shuv", "varial", "fakie", "switch", "primo", "nollie" };
-string request, reply;
-int requestCounter;
+mutex m;
+barrier bar(3); // make this work
 
+vector<string> postRequests;
+std::map<string, vector<string>> readRequestsMap;
+std::map<string, vector<string>> postRequestsMap;
+vector<string> readRequests;
 
-int main(int c, char** v) { // not sure about these parameters - maybe command line?
+LARGE_INTEGER startTime, endTime, elapsedMicroseconds, frequency;
+
+int main() { // not sure about these parameters - maybe command line?
   srand((int)time(NULL));
-  TCPClient client(v[1], PORT);
-  vector<PostRequest> postRequests; // TODO: switch to heap memory
+  TCPClient client("localhost", PORT);
   vector<thread> clientThreads;
+  string throttleString = "";
 
-  if (c != 2) {
-    printf("usage: %s server-name|IP-address\n", v[0]);
-    return 1;
-  }
-  
   //numberOfRequests = howManyRequests();
   secondsOfRequests = requestsForHowLong();
   cout << "Posters...\n";
   numberOfPosterClients = howManyClients();
   cout << "Readers...\n";
   numberOfReaderClients = howManyClients();
-
-  for (int i = 0; i < (numberOfPosterClients + numberOfReaderClients); i++) {
-    clientThreads.emplace_back(threadClient, &client);
+  cout << "Throttled? y/n\n";
+  cin >> throttleString;
+  if (throttleString == "y" || throttleString == "Y") {
+    isProgramThrottled = true;
+  }
+  else {
+    isProgramThrottled = false;
   }
 
-  // TODO: barrier 
+  for (int i = 0; i < numberOfPosterClients; i++) {
+    clientThreads.emplace_back(threadClient, true);
+  }
+  for (int i = 0; i < numberOfReaderClients; i++) {
+    clientThreads.emplace_back(threadClient, false);
+  }
+
   for (thread& thread : clientThreads)
     thread.join();
 
-  cout << requestCounter;
-  int keepAppOpen = _getch();
+  cout << "POSTS:\n";
+  for (auto post : postRequestsMap) {
+    cout << post.first << ": " << post.second.size() << endl;
+  }
+  cout << "\nREAD:\n";
+  for (auto read : readRequestsMap) {
+    cout << read.first << ": " << read.second.size() << endl;
+  }
 
+  /*cout << "Number of post requests: " << postRequestsMap.size() << endl;
+  cout << "Number of read requests: " << readRequests.size() << endl;
+  cout << "Total number of requests sent: " << postRequests.size() + readRequests.size() << endl;*/
+
+  TCPClient tempClient("localhost", PORT);
+  tempClient.OpenConnection();
+  tempClient.send("exit", isProgramThrottled);
+  tempClient.CloseConnection();
+  
+  int keepAppOpen = _getch();
   return 0;
 }
 
-void threadClient(TCPClient *client) {
-  LARGE_INTEGER start, end;
-  __int64 CounterStart;
-  double PCFrequency = 0, timeTaken = 0;
-
-  client->OpenConnection();
-
-  /*if (!QueryPerformanceFrequency(&start))
-      cout << "QueryPerformanceFrequency failed!\n";
-  PCFrequency = double(start.QuadPart) / 1000.0;
-  QueryPerformanceCounter(&start);
-  QueryPerformanceCounter(&end);
-  timeTaken = double(end.QuadPart - start.QuadPart) / PCFrequency;
-  cout << "time: " << timeTaken / 1000 << "s" << endl << endl;
-  */
-
-  LARGE_INTEGER qpcFrequency;
-  QueryPerformanceFrequency(&qpcFrequency);
-
-  LARGE_INTEGER startTime;
-  QueryPerformanceCounter(&startTime);
-
-  LARGE_INTEGER timeToReach;
-  timeToReach.QuadPart = startTime.QuadPart + qpcFrequency.QuadPart * secondsOfRequests;
+void threadClient(bool isPoster) {
+  string send, reply;
   bool quit = false;
+  TCPClient client("localhost", PORT);
+  LARGE_INTEGER temp;
+  client.OpenConnection();
+  //cout << "Client " << client.getConnectSocket() << " started!\n";
+
+  bar.count_down_and_wait(); // idk if this works???
+  LONGLONG timeToReach = startTimer();
+  QueryPerformanceCounter(&temp);
+  LONGLONG oneSecond = temp.QuadPart + frequency.QuadPart;
+
   while (!quit)
   {
-    LARGE_INTEGER currentTime;
-    QueryPerformanceCounter(&currentTime);
-
-    string topicID = topics[0]; // do counter 0 - 11
+    //string topicID = topics[rand() % 11]; // point of improvement? removing random
+    string topicID = to_string(client.getConnectSocket());
     string message(1, (rand() % 25) + 97);
-    PostRequest post(topicID, message);
-    request = post.toString();
-    reply = client->send(request);
-    requestCounter++;
-    // cout << "Sent: " << request << "\n";
-    // cout << "Returned: " << reply << "\n";
 
-    if (currentTime.QuadPart >= timeToReach.QuadPart)
+    if (isPoster) {
+      send = "POST@" + topicID + "#" + message;
+      reply = client.send(send, isProgramThrottled);
+      if (reply != "") {
+        m.lock();
+        postRequestsMap[topicID].push_back(message);
+        m.unlock();
+      }
+    }
+    else {
+      send = "READ@" + topicID + "#" + "1";
+      reply = client.send(send, isProgramThrottled);
+      if (reply != "") {
+        m.lock();
+        readRequestsMap[topicID].push_back("1");
+        m.unlock();
+      }
+    }
+    if (measureTime() >= oneSecond) { // all good. Throttling works but it misses out two seconds. So for 5 seconds - 1 thread does 3000 requests
+      QueryPerformanceCounter(&temp);
+      oneSecond = temp.QuadPart + frequency.QuadPart;
+      client.resetNumberOfRequestsSent();
+    }
+    if (measureTime() >= timeToReach)
+    {
       quit = true;
+    }
   }
+  client.CloseConnection();
+}
 
-  //while (timeTaken < secondsOfRequests) {
-  //  string topicID = topics[0]; // do counter 0 - 11
-  //  string message(1, (rand() % 25) + 97);
-  //  PostRequest post(topicID, message);
-  //  request = post.toString();
-  //  reply = client->send(request);
-  //  cout << "Sent: " << request << "\n";
-  //  cout << "Returned: " << reply << "\n";
+LONGLONG startTimer() {
+  QueryPerformanceFrequency(&frequency);
+  QueryPerformanceCounter(&startTime);
+  return startTime.QuadPart + frequency.QuadPart * secondsOfRequests;
+}
 
-  //}
-  client->send("exit");
-  client->CloseConnection();
-
+LONGLONG measureTime() {
+  QueryPerformanceCounter(&endTime);
+  return endTime.QuadPart;
 }
 
 int howManyRequests() {
@@ -144,7 +180,7 @@ int howManyRequests() {
 
 int requestsForHowLong() {
   int seconds;
-  cout << "How many seconds do you want to run requests for?\n";
+  cout << "How many seconds do you want to run requests for?  ";
   cin >> seconds;
   return seconds;
 }

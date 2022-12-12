@@ -115,6 +115,7 @@
     <ClCompile Include="TCPClient.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\Week 7 - Bidirectional\Week 7 - Bidirectional\barrier.hpp" />
     <ClInclude Include="RequestParser.h" />
     <ClInclude Include="TCPClient.h" />
   </ItemGroup>

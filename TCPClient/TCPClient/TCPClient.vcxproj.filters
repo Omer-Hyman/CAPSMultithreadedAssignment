@@ -32,5 +32,8 @@
     <ClInclude Include="RequestParser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\Week 7 - Bidirectional\Week 7 - Bidirectional\barrier.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

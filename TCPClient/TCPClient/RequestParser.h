@@ -5,71 +5,26 @@
 
 using namespace std;
 
-class PostRequest
-{
+class Request {
 public:
-	PostRequest(const string topicID, const string message);
-	~PostRequest();
-	static PostRequest parse(string request);
-	string getTopicId() const { return this->topicId; }
-	void setTopicId(string topicID) { this->topicId = topicID; }
-	string getMessage() const { return this->message; }
-	void setMessage(string message) { this->message = message;  }
-	string toString();
+	Request();
+	Request(char requestType);
+	Request(char requestType, string topicID, string message);
+	~Request();
+
+	static Request parse(const string request);
+	const bool isValid() const { return this->valid; };
+	const string getTopicID() const { return this->topicID; }
+	const string getMessage() const { return this->message; }
+	const char getRequestType() const { return this->requestType; }
+	void setValidToFalse() { this->valid = false; }
+	const string toString() { };
 
 private:
-	string topicId;
-	string message;
-	bool valid;
-};
-
-class ReadRequest
-{
-public:
-	ReadRequest();
-	~ReadRequest();
-	static ReadRequest parse(string request);
-	string getTopicId();
-	int getPostId();
-	string toString();
-
-	string topicId;
-	int postId;
-	bool valid;
-};
-
-class CountRequest
-{
-public:
-	CountRequest();
-	~CountRequest();
-	static CountRequest parse(string request);
-	string getTopicId();
-	string toString();
-
-	string topicId;
-	bool valid;
-};
-
-class ListRequest
-{
-public:
-	ListRequest();
-	~ListRequest();
-	static ListRequest parse(string request);
-	string toString();
-	bool valid;
-};
-
-class ExitRequest
-{
-public:
-	ExitRequest();
-	~ExitRequest();
-	static ExitRequest parse(string request);
-	string toString();
-	bool valid;
+	const char requestType;
+	const string topicID;
+	const string message;
+	bool valid = false;
 };
 
 #endif //__REQUESTPARSER_H
-
