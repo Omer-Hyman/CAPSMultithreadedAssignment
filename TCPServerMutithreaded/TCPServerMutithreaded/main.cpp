@@ -29,6 +29,7 @@ typedef std::vector<Request> VectorOfRequests;
 typedef std::map<string, vector<string>> RequestsMap; // TODO: change to vectors of just the message - not the whole request
 RequestsMap requests;
 std::shared_mutex sharedMutex;
+mutex m;
 
 int main() {
 	TCPServer server(DEFAULT_PORT);
@@ -54,18 +55,8 @@ int main() {
 	}
 	cout << "Total number of post requests stored: " << count << endl;
 
-	ofstream file;
-	file.open("ServerDataStructure.txt", ios::app);
-	if (file.fail()) {
-		cout << "File was not opened!";
-	}
-	else {
-		file << ;
-		file.close();
-	}
-
 	cout << "Server terminated." << endl;
-	int keepAppOpen = _getch();
+	//int keepAppOpen = _getch();
 	return 0;
 }
 
@@ -77,10 +68,11 @@ void serverThreadFunction(TCPServer* server, ReceivedSocketData&& data) {
 		server->receiveData(data, 0); // updates request field
 		if (data.request != "" && data.request != "exit" && data.request != "EXIT") {
 			data.reply = protocolVerifier(data.request);
+			server->sendReply(data);
 		} else if (data.request == "exit" || data.request == "EXIT") {
 			data.reply = "";
+			server->sendReply(data);
 		}
-		server->sendReply(data);
 	} while (data.request != "exit" && data.request != "EXIT" && !terminateServer);
 
 	if (!terminateServer && (data.request == "exit" || data.request == "EXIT")) {

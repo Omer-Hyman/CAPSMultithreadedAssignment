@@ -1,7 +1,4 @@
-﻿  TCPClient.cpp
+﻿  main.cpp
 C:\Users\omerh\OneDrive - Sheffield Hallam University\Final Year\CAPS\Assignment\TCPClient\TCPClient\TCPClient.h(18,44): warning C4244: 'return': conversion from 'const SOCKET' to 'int', possible loss of data
-  main.cpp
-C:\Users\omerh\OneDrive - Sheffield Hallam University\Final Year\CAPS\Assignment\TCPClient\TCPClient\TCPClient.h(18,44): warning C4244: 'return': conversion from 'const SOCKET' to 'int', possible loss of data
-  Generating Code...
-C:\Users\omerh\OneDrive - Sheffield Hallam University\Final Year\CAPS\Assignment\TCPClient\TCPClient\main.cpp(196): warning C4715: 'howManyClients': not all control paths return a value
+C:\Users\omerh\OneDrive - Sheffield Hallam University\Final Year\CAPS\Assignment\TCPClient\TCPClient\main.cpp(205): warning C4715: 'howManyClients': not all control paths return a value
   TCPClient.vcxproj -> C:\Users\omerh\OneDrive - Sheffield Hallam University\Final Year\CAPS\Assignment\TCPClient\x64\Debug\TCPClient.exe

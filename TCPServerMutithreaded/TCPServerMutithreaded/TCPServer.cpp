@@ -111,9 +111,8 @@ ReceivedSocketData TCPServer::accept()
 	ReceivedSocketData returnedSocketData;
 
 	returnedSocketData.ClientSocket = INVALID_SOCKET;
-
 	// Accept a client socket
-	ClientSocket = ::accept(ListenSocket, NULL, NULL);
+	ClientSocket = ::accept(ListenSocket, NULL, NULL); // LOOK HERE
 	if (ClientSocket == INVALID_SOCKET) {
 		printf("accept failed with error: %d\n", WSAGetLastError());
 		closesocket(ListenSocket);
