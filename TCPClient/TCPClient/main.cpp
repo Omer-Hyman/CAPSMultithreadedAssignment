@@ -18,7 +18,7 @@ LONGLONG measureTime();
 
 int numberOfRequests, secondsOfRequests, numberOfPosterClients, numberOfReaderClients;
 bool isProgramThrottled = false;
-string topics[11] = { "heel", "kick", "hard", "dragon", "forward", "shuv", "varial", "fakie", "switch", "primo", "nollie" };
+string topics[10] = { "heel", "kick", "hard", "dragon", "shuv", "varial", "fakie", "switch", "primo", "nollie" };
 mutex m;
 std::map<string, vector<string>> readRequestsMap;
 std::map<string, vector<string>> postRequestsMap;
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
   secondsOfRequests = stoi(argv[1]);
   numberOfPosterClients = stoi(argv[2]);
   numberOfReaderClients = stoi(argv[3]);
-  if (int(argv[4]) == 1) {
+  if (*argv[4] == '1') {
     isProgramThrottled = true;
   }
   else {
@@ -90,6 +90,12 @@ int main(int argc, char *argv[]) {
     file << "Average requests per thread per second: " << ((totalPosterRequests + totalReaderRequests) / (numberOfPosterClients + numberOfReaderClients)) / secondsOfRequests << endl;
     file.close();
   }
+  cout << "Total poster requests: " << totalPosterRequests << endl;
+  cout << "Total reader requests: " << totalReaderRequests << endl;
+  cout << "Average requests per poster thread: " << averagePoster << endl;
+  cout << "Average requests per reader thread: " << averageReader << endl;
+  cout << "Total requests: " << totalPosterRequests + totalReaderRequests << endl;
+  cout << "Average requests per thread: " << (totalPosterRequests + totalReaderRequests) / (numberOfPosterClients + numberOfReaderClients) << endl;
   cout << "Average requests per thread per second: " << ((totalPosterRequests + totalReaderRequests) / (numberOfPosterClients + numberOfReaderClients)) / secondsOfRequests << endl;
   //int keepAppOpen = _getch();
   return 0;
